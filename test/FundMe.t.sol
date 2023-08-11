@@ -7,12 +7,23 @@ import {DeployFundMe} from "../script/DeployFundMe.s.sol";
 
 contract FundMeTest is Test {
     FundMe fundMe;
+    uint256 private constant MINIMUM_USD = 5e18;
+    address immutable USER = makeAddr("user");
+    uint256 immutable USER_STARTING_BALANCE = 100e18;
 
     constructor() {}
+
+    modifier funded() {
+        vm.prank(USER);
+        fundMe.fund{value: MINIMUM_USD}();
+        _;
+    }
 
     function setUp() external {
         DeployFundMe deployFundMe = new DeployFundMe();
         fundMe = deployFundMe.run();
+
+        vm.deal(USER, USER_STARTING_BALANCE);
     }
 
     function testMininumDollarIsFive() public {
@@ -28,5 +39,62 @@ contract FundMeTest is Test {
 
     function testPriceAggregatorVersion() public {
         assertEq(fundMe.getVersion(), 4);
+    }
+
+    function testFundFailsWithLessThanMinimum() public {
+        vm.expectRevert("You need to spend more ETH!");
+        fundMe.fund{value: 0}();
+    }
+
+    function testFundUpdatesFundMeDataStructures() public {
+        vm.prank(USER);
+        fundMe.fund{value: MINIMUM_USD}();
+
+        assertEq(fundMe.getAddressToAmountFunded(USER), MINIMUM_USD);
+    }
+
+    function testAddsFunderToFundersArray() public funded {
+        vm.prank(USER);
+        fundMe.fund{value: MINIMUM_USD}();
+
+        assertEq(fundMe.getFunder(0), USER);
+    }
+
+    function testOnlyOwnerCanWithdraw() public {
+        vm.expectRevert();
+
+        vm.prank(USER);
+        fundMe.withdraw();
+    }
+
+    function testWithdrawFromSingleFunder() public funded {
+        uint256 startingBalance = fundMe.i_owner().balance;
+        uint256 expectedBalance = startingBalance + address(fundMe).balance;
+
+        vm.prank(fundMe.i_owner());
+        fundMe.withdraw();
+
+        assertEq(fundMe.i_owner().balance, expectedBalance);
+        assertEq(address(fundMe).balance, 0);
+    }
+
+    function testWithdrawFromMultipleFunders() public funded {
+        uint160 numberOfFounders = 10;
+        uint160 startingFounderIndex = 1;
+
+        for (uint160 i = startingFounderIndex; i < numberOfFounders; i++) {
+            hoax(address(i), MINIMUM_USD);
+            fundMe.fund{value: MINIMUM_USD}();
+        }
+
+        uint256 startingBalance = fundMe.i_owner().balance;
+        uint256 expectedBalance = startingBalance + address(fundMe).balance;
+
+        vm.startPrank(fundMe.i_owner());
+        fundMe.withdraw();
+        vm.stopPrank();
+
+        assertEq(fundMe.i_owner().balance, expectedBalance);
+        assertEq(address(fundMe).balance, 0);
     }
 }
