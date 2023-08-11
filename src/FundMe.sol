@@ -27,7 +27,7 @@ contract FundMe {
             msg.value.getConversionRate(AggregatorV3Interface(priceFeedAddress)) >= MINIMUM_USD,
             "You need to spend more ETH!"
         );
-    
+
         addressToAmountFunded[msg.sender] += msg.value;
         funders.push(msg.sender);
     }

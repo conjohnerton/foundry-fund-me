@@ -25,4 +25,8 @@ contract FundMeTest is Test {
         // assertEq(fundMe.i_owner(), msg.sender);
         assertEq(fundMe.i_owner(), msg.sender);
     }
+
+    function testPriceAggregatorVersion() public {
+        assertEq(fundMe.getVersion(), 4);
+    }
 }
